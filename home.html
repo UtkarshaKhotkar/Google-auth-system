@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sign in</title>
+  <style>
+    body{font-family:Arial, Helvetica, sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:-moz-linear-gradient(45deg, #49a09d, #5f2c82);background:-webkit-linear-gradient(45deg, #49a09d, #5f2c82);background:linear-gradient(45deg, #49a09d, #5f2c82)}
+    .card{background:white;padding:28px;border-radius:12px;box-shadow:0 6px 18px rgba(20,20,40,0.08);width:420px;max-width:94%}
+    .center{text-align:center}
+    #user-info{margin-top:18px}
+    pre{white-space:pre-wrap;background:#f3f4f6;padding:12px;border-radius:8px;font-size:13px}
+    .btn-custom{display:inline-flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;border:1px solid #d1d5db;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2 class="center">Sign in</h2>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <div id="g_id_signin" style="display:flex;justify-content:center;margin-top:12px"></div>
+    <div class="center" style="margin-top:12px">
+      <button id="customBtn" class="btn-custom">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo" style="width:18px;height:18px"/>
+        Sign in
+      </button>
+    </div>
+
+    <div id="user-info"></div>
+  </div>
+  <script>
+    const CLIENT_ID = 'ID.apps.googleusercontent.com';
+
+    function parseJwt(token) {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+',/_/g,'/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    }
+
+    async function sendTokenToServer(idToken) {
+      try {
+        const res = await fetch('http://localhost:4000/tokensignin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: idToken })
+        });
+        const data = await res.json();
+        return data;
+      } catch (err) {
+        return { error: err.message || 'netwrok  error' };
+      }
+    }
+    function handleCredentialResponse(response) {
+      const idToken = response.credential;
+      const clientPayload = parseJwt(idToken);
+
+      const out = document.getElementById('user-info');
+      out.innerHTML = '<p>Verifying token on server…</p>';
+
+      sendTokenToServer(idToken).then(serverResp => {
+        if (serverResp && serverResp.success) {
+          out.innerHTML = `
+            <h3 style="margin-bottom:6px">Signed in (server verified)</h3>
+            <pre>${JSON.stringify(serverResp.payload, null, 2)}</pre>
+            <p style="font-size:13px;color:#444">Client-side token claims (truncated):</p>
+            <pre>${JSON.stringify(clientPayload, null, 2)}</pre>
+          `;
+        } else {
+          out.innerHTML = `<p style="color:#b91c1c">Server verification failed: ${serverResp.error || JSON.stringify(serverResp)}</p>`;
+        }
+      });
+    }
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('user-info').innerHTML = '<p>Loading…</p>';
+    });
+
+    window.addEventListener('load', () => {
+      if (!CLIENT_ID || CLIENT_ID.includes('ID')) {
+        document.getElementById('user-info').innerHTML = '<p style="color:#b91c1c">Enter your credentials</p>';
+        return;
+      }
+
+      google.accounts.id.initialize({
+        client_id: CLIENT_ID,
+        callback: handleCredentialResponse,
+      });
+
+      google.accounts.id.renderButton(
+        document.getElementById('g_id_signin'),
+        { theme: 'outline', size: 'large', width: '280' }
+      );
+
+      document.getElementById('customBtn').addEventListener('click', () => {
+        google.accounts.id.prompt();
+      });
+    });
+  </script>
+</body>
+</html>
